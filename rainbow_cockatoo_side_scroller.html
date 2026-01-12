@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Tropical Farts: The Game</title>
+<style>
+body{margin:0;background:#0b1d2a;display:flex;justify-content:center;align-items:center;height:100vh;font-family:Arial}
+canvas{border:3px solid #fff;background:linear-gradient(#87ceeb 0%,#87ceeb 55%,#1e90ff 55%,#1e90ff 65%,#f4d03f 65%,#f4d03f 100%)}
+#overlay{position:absolute;color:white;text-align:center;font-size:22px;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:rgba(0,0,0,0.6)}
+button{font-size:18px;margin:6px;padding:6px 14px;cursor:pointer}
+</style>
+</head>
+<body>
+<div id="overlay">
+  <h2>🌴💨 Tropical Farts: The Game</h2>
+  <p>Select Difficulty</p>
+  <button onclick="startGame('easy')">Easy</button>
+  <button onclick="startGame('medium')">Medium</button>
+  <button onclick="startGame('hard')">Hard</button>
+  <p>SPACE = Fly 💨 (yes, it farts)</p>
+</div>
+<canvas id="game" width="960" height="480"></canvas>
+<script>
+// ================================
+// CANVAS
+// ================================
+const c=document.getElementById('game'),ctx=c.getContext('2d');
+const overlay=document.getElementById('overlay');
+
+// ================================
+// CONFIGS
+// ================================
+const CONFIGS={
+  easy:{s:2.5,g:0.3,e:2600},
+  medium:{s:4,g:0.45,e:1800},
+  hard:{s:6,g:0.6,e:1200}
+};
+
+let cfg=null,speed=0,gravity=0,gameStarted=false,gameOver=false;
+
+// ================================
+// AUDIO
+// ================================
+const AC=new (window.AudioContext||window.webkitAudioContext)();
+let bgOsc=null,bgGain=null;
+
+function startMusic(){
+  bgOsc=AC.createOscillator();
+  bgGain=AC.createGain();
+  bgOsc.type='sawtooth';
+  bgOsc.frequency.value=120;
+  bgGain.gain.value=0.04;
+  bgOsc.connect(bgGain).connect(AC.destination);
+  bgOsc.start();
+}
+
+function fart(){
+  const o=AC.createOscillator(),g=AC.createGain();
+  o.type='square';
+  o.frequency.value=60+Math.random()*40;
+  g.gain.setValueAtTime(0.25,AC.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.01,AC.currentTime+0.4);
+  o.connect(g).connect(AC.destination);
+  o.start();
+  o.stop(AC.currentTime+0.45);
+
+  for(let i=0;i<6;i++){
+    farts.push({
+      x:p.x-20,
+      y:p.y+Math.random()*10,
+      r:8+Math.random()*6,
+      vx:-1-Math.random()*2,
+      vy:(Math.random()-.5),
+      life:40
+    });
+  }
+}
+
+// ================================
+// PLAYER
+// ================================
+const p={x:140,y:220,dy:0};
+
+// ================================
+// WORLD
+// ================================
+let enemies=[],dews=[],clouds=[],palms=[],farts=[],score=0;
+for(let i=0;i<6;i++)palms.push({x:i*220});
+for(let i=0;i<5;i++)clouds.push({x:Math.random()*c.width,y:Math.random()*80});
+
+// ================================
+// START GAME
+// ================================
+function startGame(level){
+  cfg=CONFIGS[level];
+  speed=cfg.s;
+  gravity=cfg.g;
+  overlay.style.display='none';
+  gameStarted=true;
+  gameOver=false;
+  score=0;
+  enemies=[];
+  dews=[];
+  AC.resume();
+  startMusic();
+  setInterval(spawnEnemy,cfg.e);
+  setInterval(spawnDew,1800);
+}
+
+// ================================
+// DRAWING
+// ================================
+function drawBG(){
+  ctx.fillStyle='yellow';
+  ctx.beginPath();ctx.arc(820,80,40,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='white';
+  clouds.forEach(cl=>{
+    ctx.beginPath();
+    ctx.arc(cl.x,cl.y,20,0,Math.PI*2);
+    ctx.arc(cl.x+25,cl.y+5,18,0,Math.PI*2);
+    ctx.fill();
+    cl.x-=0.3;
+    if(cl.x<-60)cl.x=c.width;
+  });
+  palms.forEach(pl=>{
+    pl.x-=speed*0.4;
+    if(pl.x<-50)pl.x=c.width+100;
+    ctx.fillStyle='#8b5a2b';ctx.fillRect(pl.x,300,10,80);
+    ctx.fillStyle='green';ctx.beginPath();ctx.arc(pl.x+5,300,35,0,Math.PI*2);ctx.fill();
+  });
+}
+
+function drawBird(){
+  drawFarts();
+  ctx.fillStyle='white';ctx.beginPath();ctx.ellipse(p.x,p.y,24,14,0,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.ellipse(p.x-6,p.y+6,14,8,-0.5,0,Math.PI*2);ctx.fill();
+  ctx.beginPath();ctx.arc(p.x+18,p.y-8,10,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='orange';ctx.beginPath();ctx.moveTo(p.x+28,p.y-8);ctx.lineTo(p.x+44,p.y-4);ctx.lineTo(p.x+28,p.y);ctx.fill();
+  ['red','orange','yellow','green','blue','purple'].forEach((c2,i)=>{
+    ctx.strokeStyle=c2;
+    ctx.beginPath();ctx.moveTo(p.x+18,p.y-18);ctx.lineTo(p.x+8+i*4,p.y-32);ctx.stroke();
+  });
+}
+
+// ================================
+// ENTITIES
+// ================================
+function spawnEnemy(){enemies.push({x:c.width,y:Math.random()*240+40});}
+function spawnDew(){dews.push({x:c.width,y:Math.random()*240+40});}
+
+function drawFarts(){
+  farts.forEach(f=>{
+    ctx.fillStyle='rgba(180,255,180,'+(f.life/40)+')';
+    ctx.beginPath();ctx.arc(f.x,f.y,f.r,0,Math.PI*2);ctx.fill();
+    f.x+=f.vx;f.y+=f.vy;f.r*=0.97;f.life--;
+  });
+  farts=farts.filter(f=>f.life>0);
+}
+
+function drawEnemies(){
+  enemies.forEach(e=>{
+    ctx.fillStyle='#ff69b4';ctx.beginPath();ctx.arc(e.x,e.y,18,0,Math.PI*2);ctx.fill();
+    ctx.fillStyle='#000';ctx.fillRect(e.x-6,e.y-4,4,4);ctx.fillRect(e.x+2,e.y-4,4,4);
+  });
+}
+
+function drawDews(){
+  dews.forEach(d=>{
+    ctx.fillStyle='#00ff00';ctx.fillRect(d.x,d.y,14,26);
+    ctx.fillStyle='#fff';ctx.fillText('DEW',d.x-6,d.y+40);
+  });
+}
+
+// ================================
+// UPDATE
+// ================================
+function update(){
+  if(!gameStarted)return;
+  p.dy+=gravity;
+  p.y+=p.dy;
+  if(p.y<20)p.y=20;
+  if(p.y>420)p.y=420;
+  enemies.forEach(e=>e.x-=speed);
+  dews.forEach(d=>d.x-=speed);
+  enemies=enemies.filter(e=>e.x>-40);
+  dews=dews.filter(d=>d.x>-40);
+}
+
+function hit(){
+  enemies.forEach(e=>{
+    if(Math.abs(p.x-e.x)<22&&Math.abs(p.y-e.y)<22){endGame();}
+  });
+  dews.forEach((d,i)=>{
+    if(Math.abs(p.x-d.x)<20&&Math.abs(p.y-d.y)<20){score+=100;dews.splice(i,1);}
+  });
+}
+
+function hud(){
+  ctx.fillStyle='#000';
+  ctx.font='20px Arial';
+  ctx.fillText('Score: '+score,10,25);
+}
+
+function endGame(){
+  if(gameOver) return;
+  gameOver=true;
+  gameStarted=false;
+  fart();fart();fart();
+  overlay.innerHTML=`<h2>💀 GAME OVER 💀</h2><p>Final Score: ${score}</p><button onclick=\"location.reload()\">Restart</button>`;
+  overlay.style.display='flex';
+}
+
+// ================================
+// LOOP
+// ================================
+function loop(){
+  ctx.clearRect(0,0,c.width,c.height);
+  drawBG();update();hit();drawBird();drawEnemies();drawDews();hud();
+  if(gameStarted)score++;
+  requestAnimationFrame(loop);
+}
+
+// ================================
+// INPUT
+// ================================
+document.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&gameStarted){p.dy=-6;fart();}
+});
+
+loop();
+</script>
+</body>
+</html>
